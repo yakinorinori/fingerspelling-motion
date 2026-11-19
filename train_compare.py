@@ -30,7 +30,7 @@ from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 from torch import nn
 
 from common import CACHE_DIR, NUM_CLASSES, RESULT_DIR, load_index
-from features import FEATURE_SETS, compute_features
+from features import FEATURE_SETS, base_features, compute_features, motion_a_features
 from models import MODELS, build_model, count_params
 
 
@@ -50,8 +50,16 @@ def load_dataset(feature_sets):
         if len(lm) == 0 or np.isnan(lm).any(axis=(1, 2)).all():
             print(f"[注意] 手が1フレームも検出できなかったので除外: {r['video']}")
             continue
+        base = base_features(lm)  # 既存125次元は1回だけ計算して使い回す
         for fs in feature_sets:
-            feats[fs].append(compute_features(lm, int(d["width"]), int(d["height"]), fs, float(d["fps"])))
+            if fs == "base":
+                feats[fs].append(base)
+            elif fs == "base+A":
+                feats[fs].append(np.concatenate([base, motion_a_features(lm, int(d["width"]), int(d["height"]))], 1))
+            else:
+                feats[fs].append(compute_features(lm, int(d["width"]), int(d["height"]), fs, float(d["fps"])))
+        if len(keep) % 500 == 0:
+            print(f"  特徴量を計算中… {len(keep)}/{len(rows)}")
         keep.append(r)
     labels = np.array([r["label"] for r in keep])
     return keep, feats, labels
@@ -180,10 +188,15 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--group-regex", default="", help="ファイル名からグループ（人など）を取り出す正規表現。省略時は動画ごと")
     parser.add_argument("--final", action="store_true", help="比較のあと、全データで学習したモデルを保存する")
+    parser.add_argument("--device", default="auto", choices=["auto", "cpu", "mps", "cuda"],
+                        help="計算に使う装置。Mac の GPU（mps）でエラーが出るときは cpu")
     args = parser.parse_args()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else
-                          "mps" if torch.backends.mps.is_available() else "cpu")
+    if args.device == "auto":
+        device = torch.device("cuda" if torch.cuda.is_available() else
+                              "mps" if torch.backends.mps.is_available() else "cpu")
+    else:
+        device = torch.device(args.device)
     print(f"デバイス: {device}")
     rows, feats, labels = load_dataset(args.features)
     groups = make_groups(rows, args.group_regex)
@@ -197,7 +210,7 @@ def main():
         print(f"[注意] 本数が少ないので {n_folds} 分割にします")
     splitter = StratifiedGroupKFold(n_splits=n_folds, shuffle=True, random_state=args.seed) \
         if args.group_regex else StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=args.seed)
-    folds = list(splitter.split(np.zeros(len(labels)), labels, groups))
+    folds = list(splitter.split(np.zeros(len(labels)), labels, groups if args.group_regex else None))
 
     RESULT_DIR.mkdir(exist_ok=True)
     fold_rows, summary = [], []

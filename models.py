@@ -36,10 +36,10 @@ class CNN1D(nn.Module):
 
     def forward(self, x, mask):
         m = mask.unsqueeze(1).float()
-        h = self.inp(x.transpose(1, 2)) * m          # (B,C,T)
+        h = self.inp(x.transpose(1, 2).contiguous()) * m   # (B,C,T)。Mac(MPS)対策で contiguous にする
         for block in self.blocks:
-            h = (h + block(h)) * m                    # 残差接続、パディング部分は0に戻す
-        return self.head(masked_mean(h.transpose(1, 2), mask))
+            h = ((h + block(h)) * m).contiguous()     # 残差接続、パディング部分は0に戻す
+        return self.head(masked_mean(h.transpose(1, 2).contiguous(), mask))
 
 
 class PositionalEncoding(nn.Module):
