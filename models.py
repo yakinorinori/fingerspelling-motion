@@ -8,6 +8,10 @@
 どちらも最後は「本物のフレームだけの平均」→ 全結合でクラスを出す。
 """
 import math
+import os
+
+# Mac(MPS)で未対応の処理があっても CPU で代わりに計算させる（torch を読み込む前に設定する）
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 import torch
 from torch import nn
@@ -62,7 +66,8 @@ class Transformer(nn.Module):
         self.inp = nn.Linear(in_dim, d_model)
         self.pos = PositionalEncoding(d_model)
         layer = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, batch_first=True)
-        self.encoder = nn.TransformerEncoder(layer, num_layers)
+        # enable_nested_tensor=False：Mac(MPS)で未対応の処理を使わないようにする
+        self.encoder = nn.TransformerEncoder(layer, num_layers, enable_nested_tensor=False)
         self.drop = nn.Dropout(dropout)
         self.head = nn.Linear(d_model, num_classes)
 

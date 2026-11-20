@@ -11,6 +11,9 @@
     python recognize_video.py --model ... 動画.mp4 --window 30 --stride 5 --no-show
 """
 import argparse
+import os
+
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")  # Mac(MPS)で未対応の処理は CPU で計算
 from collections import Counter
 from pathlib import Path
 

@@ -17,6 +17,9 @@
     python train_compare.py --group-regex "^(ASL_[A-E]|ubmoji)"   # ファイル名から人などのグループを取り出して分割
 """
 import argparse
+import os
+
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")  # Mac(MPS)で未対応の処理は CPU で計算
 import csv
 import json
 import re
